@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from calendar_auth import get_calendar_service
 import json
 import asyncio # <--- 1. IMPORT ASYNCIO
+from starlette.requests import Request         # <--- ADD THIS
+from starlette.responses import JSONResponse   # <--- ADD THIS
 
 # Initialize FastMCP server
 mcp = FastMCP("IP Assistant MCP Server")
@@ -325,12 +327,12 @@ async def list_upcoming_meetings(days_ahead: int = 7) -> str:
         days_ahead
     )
 
-@mcp.app.get("/health")
-async def http_health_check():
+@mcp.custom_route("/health", methods=["GET"])
+async def http_health_check(request: Request) -> JSONResponse:
     """A simple HTTP health check endpoint for Render."""
-    return {"status": "ok"}
+    return JSONResponse({"status": "ok"})
 
-    
+
 # Add server info resource
 @mcp.resource("server://info")
 def server_info() -> str:
