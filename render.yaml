@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: ip-assistant-mcp
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: PERPLEXITY_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REFRESH_TOKEN
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.13.0"
+      - key: PORT
+        value: "8000"
