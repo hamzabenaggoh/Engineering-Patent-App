@@ -1,22 +1,14 @@
 services:
   - type: web
-    name: engineering-patent-app # Your service name
+    name: Engineering-Patent-App
     env: python
     region: oregon
     plan: free
-    
     buildCommand: pip install -r requirements.txt
-    
-    # Make sure this is pointing to the right file
-    startCommand: python main.py 
-    
-    # --- THIS IS THE BLOCK THAT IS FAILING ---
-    # You MUST add this to your file
+    startCommand: python main.py
     healthCheck:
       path: /health
       initialDelaySeconds: 45 
-    # ----------------------------------------
-      
     envVars:
       - key: PERPLEXITY_API_KEY
         sync: false
@@ -27,6 +19,6 @@ services:
       - key: GOOGLE_REFRESH_TOKEN
         sync: false
       - key: PYTHON_VERSION
-        value: "3.12"
+        value: "3.12" # Using a stable Python version
       - key: PORT
         value: "8000"

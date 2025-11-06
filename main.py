@@ -4,9 +4,10 @@ import httpx
 from datetime import datetime, timedelta
 from calendar_auth import get_calendar_service
 import json
-import asyncio # <--- 1. IMPORT ASYNCIO
-from starlette.requests import Request         # <--- ADD THIS
-from starlette.responses import JSONResponse   # <--- ADD THIS
+
+# --- ADD STARLETTE IMPORTS FOR HEALTH CHECK ---
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 # Initialize FastMCP server
 mcp = FastMCP("IP Assistant MCP Server")
@@ -18,16 +19,9 @@ PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 async def search_patents(query: str, focus: str = "patents") -> str:
     """
     Search for patents and prior art using Perplexity AI.
-    
-    Args:
-        query: The invention or technology to search for
-        focus: Type of search - "patents", "research", or "general"
-    
-    Returns:
-        Search results with patent numbers, dates, and technical details
+    (This tool is async, which is good)
     """
     
-    # Craft a focused prompt for patent searching
     if focus == "patents":
         prompt = f"""Search for patents and prior art related to: {query}
 
@@ -41,7 +35,7 @@ Please provide:
 Focus on the most relevant 3-5 patents."""
     else:
         prompt = f"Search for technical information about: {query}"
-    
+        
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
@@ -53,14 +47,8 @@ Focus on the most relevant 3-5 patents."""
                 json={
                     "model": "sonar",
                     "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are a patent research assistant. Always provide specific patent numbers and technical details. Be concise but thorough."
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
+                        {"role": "system", "content": "You are a patent research assistant."},
+                        {"role": "user", "content": prompt}
                     ],
                     "temperature": 0.2,
                     "max_tokens": 1500
@@ -79,9 +67,12 @@ Focus on the most relevant 3-5 patents."""
         except Exception as e:
             return f"Error searching patents: {str(e)}"
 
-# --- 2. CREATE SYNCHRONOUS HELPER FUNCTIONS FOR CALENDAR ---
+# --- CALENDAR TOOLS (Synchronous / Blocking) ---
+# As requested, these will run synchronously and block the server.
+# This may cause Render health checks to time out if a call is slow.
 
-def _sync_schedule_meeting(
+@mcp.tool()
+def schedule_meeting(
     title: str,
     attendee_email: str,
     date: str,
@@ -89,12 +80,13 @@ def _sync_schedule_meeting(
     duration_minutes: int = 60,
     description: str = ""
 ) -> str:
-    """Synchronous helper to schedule a meeting."""
+    """
+    Schedule a meeting on Google Calendar.
+    (This is a BLOCKING call)
+    """
     try:
-        # Get calendar service
-        service = get_calendar_service() # This is a blocking call
+        service = get_calendar_service() # Blocking call
         
-        # Parse datetime
         try:
             start_dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
         except ValueError:
@@ -102,21 +94,12 @@ def _sync_schedule_meeting(
         
         end_dt = start_dt + timedelta(minutes=duration_minutes)
         
-        # Create event
         event = {
             'summary': title,
-            'description': description or 'IP Intake Meeting - Invention Disclosure Discussion\n\nScheduled via IP Assistant',
-            'start': {
-                'dateTime': start_dt.isoformat(),
-                'timeZone': 'America/New_York', # Note: Consider making this dynamic if users are in other timezones
-            },
-            'end': {
-                'dateTime': end_dt.isoformat(),
-                'timeZone': 'America/New_York',
-            },
-            'attendees': [
-                {'email': attendee_email},
-            ],
+            'description': description or 'IP Intake Meeting',
+            'start': {'dateTime': start_dt.isoformat(), 'timeZone': 'America/New_York'},
+            'end': {'dateTime': end_dt.isoformat(), 'timeZone': 'America/New_York'},
+            'attendees': [{'email': attendee_email}],
             'reminders': {
                 'useDefault': False,
                 'overrides': [
@@ -132,74 +115,54 @@ def _sync_schedule_meeting(
             }
         }
         
-        # Insert event - THIS IS A BLOCKING CALL
         event_result = service.events().insert(
             calendarId='primary',
             body=event,
             conferenceDataVersion=1,
             sendUpdates='all'
-        ).execute() 
+        ).execute() # Blocking call
         
-        # Format response
         meet_link = event_result.get('hangoutLink', 'No video link')
         calendar_link = event_result.get('htmlLink', 'No calendar link')
         
-        return f"""✅ Meeting scheduled successfully!
-
-📅 {title}
-📧 Attendee: {attendee_email}
-🕐 {start_dt.strftime('%A, %B %d, %Y at %I:%M %p')}
-⏱️  Duration: {duration_minutes} minutes
-
-🔗 Calendar: {calendar_link}
-📹 Google Meet: {meet_link}
-
-Email invitations sent to all attendees."""
+        return f"✅ Meeting scheduled successfully!\n📅 {title}\n🔗 Calendar: {calendar_link}\n📹 Google Meet: {meet_link}"
         
     except Exception as e:
-        return f"❌ Error creating meeting: {str(e)}\n\nPlease check that the date/time format is correct and try again."
+        return f"❌ Error creating meeting: {str(e)}"
 
-def _sync_find_available_times(
+@mcp.tool()
+def find_available_times(
     date: str,
     duration_minutes: int = 60
 ) -> str:
-    """Synchronous helper to find available time slots."""
+    """
+    Find available time slots on a specific date.
+    (This is a BLOCKING call)
+    """
     try:
         service = get_calendar_service() # Blocking
         
-        # Parse date
         try:
             target_date = datetime.strptime(date, "%Y-%m-%d")
         except ValueError:
             return f"❌ Invalid date format. Use YYYY-MM-DD. Got: {date}"
         
-        # Get events for the day (9 AM - 5 PM)
         start_of_day = target_date.replace(hour=9, minute=0, second=0)
         end_of_day = target_date.replace(hour=17, minute=0, second=0)
         
-        # BLOCKING CALL
         events_result = service.events().list(
             calendarId='primary',
             timeMin=start_of_day.isoformat() + 'Z',
             timeMax=end_of_day.isoformat() + 'Z',
             singleEvents=True,
             orderBy='startTime'
-        ).execute()
+        ).execute() # Blocking
         
         events = events_result.get('items', [])
         
         if not events:
-            return f"""✅ Fully available on {target_date.strftime('%A, %B %d, %Y')}
-
-Available slots (business hours 9 AM - 5 PM):
-- 9:00 AM - 5:00 PM (entire day open)
-
-Recommended times for {duration_minutes}-minute meeting:
-- 10:00 AM
-- 2:00 PM
-- 3:00 PM"""
+            return f"✅ Fully available on {target_date.strftime('%A, %B %d, %Y')}"
         
-        # Format busy times
         busy_slots = []
         for event in events:
             start = event['start'].get('dateTime', event['start'].get('date'))
@@ -213,40 +176,37 @@ Recommended times for {duration_minutes}-minute meeting:
             else:
                 busy_slots.append(f"• All day: {summary}")
         
-        return f"""📅 Schedule for {target_date.strftime('%A, %B %d, %Y')}:
-
-Busy times:
-{chr(10).join(busy_slots)}
-
-💡 Look for {duration_minutes}-minute gaps between meetings for scheduling."""
+        return f"📅 Schedule for {target_date.strftime('%A, %B %d, %Y')}:\n\nBusy times:\n{chr(10).join(busy_slots)}"
         
     except Exception as e:
         return f"❌ Error checking availability: {str(e)}"
 
-def _sync_list_upcoming_meetings(days_ahead: int = 7) -> str:
-    """Synchronous helper to list upcoming meetings."""
+@mcp.tool()
+def list_upcoming_meetings(days_ahead: int = 7) -> str:
+    """
+    List upcoming meetings in the next N days.
+    (This is a BLOCKING call)
+    """
     try:
         service = get_calendar_service() # Blocking
         
         now = datetime.utcnow()
         end_date = now + timedelta(days=days_ahead)
         
-        # BLOCKING CALL
         events_result = service.events().list(
             calendarId='primary',
             timeMin=now.isoformat() + 'Z',
-            timeMax=end_date.isoformat() + 'Z',
+            timeMax=end_of_day.isoformat() + 'Z',
             maxResults=20,
             singleEvents=True,
             orderBy='startTime'
-        ).execute()
+        ).execute() # Blocking
         
         events = events_result.get('items', [])
         
         if not events:
             return f"📭 No upcoming meetings in the next {days_ahead} days."
         
-        # Group by date
         meetings_by_date = {}
         for event in events:
             start = event['start'].get('dateTime', event['start'].get('date'))
@@ -261,7 +221,6 @@ def _sync_list_upcoming_meetings(days_ahead: int = 7) -> str:
                     meetings_by_date[date_key] = []
                 meetings_by_date[date_key].append(f"  • {time_str}: {summary}")
         
-        # Format output
         output = [f"📅 Upcoming meetings (next {days_ahead} days):\n"]
         for date_key, meetings in meetings_by_date.items():
             output.append(f"{date_key}:")
@@ -273,67 +232,16 @@ def _sync_list_upcoming_meetings(days_ahead: int = 7) -> str:
     except Exception as e:
         return f"❌ Error listing meetings: {str(e)}"
 
-# --- 3. UPDATE @mcp.tool() DEFINITIONS TO USE THE HELPERS ---
-
-@mcp.tool()
-async def schedule_meeting(
-    title: str,
-    attendee_email: str,
-    date: str,
-    time: str,
-    duration_minutes: int = 60,
-    description: str = ""
-) -> str:
-    """
-    Schedule a meeting on Google Calendar.
-    ... (docstring args) ...
-    """
-    # Run the blocking function in a thread
-    return await asyncio.to_thread(
-        _sync_schedule_meeting,
-        title,
-        attendee_email,
-        date,
-        time,
-        duration_minutes,
-        description
-    )
-
-@mcp.tool()
-async def find_available_times(
-    date: str,
-    duration_minutes: int = 60
-) -> str:
-    """
-    Find available time slots on a specific date.
-    ... (docstring args) ...
-    """
-    # Run the blocking function in a thread
-    return await asyncio.to_thread(
-        _sync_find_available_times,
-        date,
-        duration_minutes
-    )
-
-@mcp.tool()
-async def list_upcoming_meetings(days_ahead: int = 7) -> str:
-    """
-    List upcoming meetings in the next N days.
-    ... (docstring args) ...
-    """
-    # Run the blocking function in a thread
-    return await asyncio.to_thread(
-        _sync_list_upcoming_meetings,
-        days_ahead
-    )
-
+# --- RENDER HEALTH CHECK ---
+# This is still mandatory for Render deployment,
+# regardless of using 'http' or 'sse' transport.
 @mcp.custom_route("/health", methods=["GET"])
 async def http_health_check(request: Request) -> JSONResponse:
     """A simple HTTP health check endpoint for Render."""
     return JSONResponse({"status": "ok"})
 
+# --- (Rest of your server info/main function) ---
 
-# Add server info resource
 @mcp.resource("server://info")
 def server_info() -> str:
     """Information about this MCP server and its capabilities"""
@@ -345,32 +253,15 @@ This server helps Daimler engineers move inventions through the IP pipeline.
 
 1. search_patents
    - Search for patents and prior art using Perplexity AI
-   - Provides patent numbers, dates, and technical details
-   - Usage: "Search for patents on adaptive cooling fins"
 
 2. schedule_meeting
    - Create Google Calendar events
-   - Sends invitations to attendees
-   - Includes Google Meet links
-   - Usage: "Schedule meeting with paul.focke@daimler.com tomorrow at 2 PM"
 
 3. find_available_times
    - Check calendar availability
-   - Find open slots for meetings
-   - Usage: "Check my availability on Friday"
 
 4. list_upcoming_meetings
    - View upcoming meetings
-   - Default: next 7 days
-   - Usage: "What meetings do I have this week?"
-
-🔧 Configuration:
-- Patent Search: Powered by Perplexity AI
-- Calendar: Google Calendar API with OAuth2
-- Transport: Server-Sent Events (SSE)
-
-📝 Example Usage:
-"I invented a new adaptive cooling system for EV batteries. Search for similar patents and schedule a meeting with Paul for next Tuesday at 2 PM to discuss it."
 """
 
 @mcp.resource("server://health")
@@ -385,13 +276,27 @@ Perplexity API: {perplexity_status}
 Google Calendar: {calendar_status}
 
 Server: Running
-Transport: SSE (Server-Sent Events)
+Transport: HTTP
 """
 
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     
-
+    print(f"""
+╔══════════════════════════════════════════════════════╗
+║         IP Assistant MCP Server                     ║
+║                                                      ║
+║  🚀 Starting server on port {port}                    ║
+║  🔧 Transport: HTTP (Switched from SSE)              ║
+║                                                      ║
+║  Tools available:                                    ║
+║    • search_patents (Perplexity AI)                 ║
+║    • schedule_meeting (Google Calendar)             ║
+║    • find_available_times                           ║
+║    • list_upcoming_meetings                         ║
+║  🩺 Health Check: /health                           ║
+╚══════════════════════════════════════════════════════╝
+    """)
     
-    mcp.run(transport="sse", host="0.0.0.0", port=port)
+    mcp.run(transport="http", host="0.0.0.0", port=port)
