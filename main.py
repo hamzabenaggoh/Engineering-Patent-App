@@ -358,10 +358,8 @@ Server: Running
 Transport: SSE (Server-Sent Events)
 """
 
+
 if __name__ == "__main__":
-    # Run with uvicorn for production
-    import uvicorn
-    
     port = int(os.getenv("PORT", 8000))
     
     print(f"""
@@ -379,12 +377,4 @@ if __name__ == "__main__":
 ╚══════════════════════════════════════════════════════╝
     """)
     
-    # Get the ASGI app from FastMCP
-    app = mcp.get_asgi_app()
-    
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=port,
-        log_level="info"
-    )
+    mcp.run(transport="sse", port=port)
