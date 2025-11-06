@@ -6,6 +6,10 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
+    # Add this entire healthCheck block
+    healthCheck:
+      path: /sse
+      initialDelaySeconds: 45 # Give the server time to start up
     envVars:
       - key: PERPLEXITY_API_KEY
         sync: false
@@ -16,6 +20,6 @@ services:
       - key: GOOGLE_REFRESH_TOKEN
         sync: false
       - key: PYTHON_VERSION
-        value: "3.13.0"
+        value: "3.12"  # Changed from 3.13.0 for stability
       - key: PORT
         value: "8000"
