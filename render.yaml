@@ -8,8 +8,8 @@ services:
     startCommand: python main.py
     # Add this entire healthCheck block
     healthCheck:
-      path: /sse
-      initialDelaySeconds: 45 # Give the server time to start up
+      path: /health
+      initialDelaySeconds: 45
     envVars:
       - key: PERPLEXITY_API_KEY
         sync: false

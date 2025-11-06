@@ -325,6 +325,12 @@ async def list_upcoming_meetings(days_ahead: int = 7) -> str:
         days_ahead
     )
 
+@mcp.app.get("/health")
+async def http_health_check():
+    """A simple HTTP health check endpoint for Render."""
+    return {"status": "ok"}
+
+    
 # Add server info resource
 @mcp.resource("server://info")
 def server_info() -> str:
