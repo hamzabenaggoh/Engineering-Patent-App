@@ -16,15 +16,54 @@ PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 async def search_patents(query: str, focus: str = "patents") -> str:
     """
     Search for patents and prior art using Perplexity AI.
-    ... (This tool is already async-native with httpx, so it's fine) ...
+    
+    Args:
+        query: The invention or technology to search for
+        focus: Type of search - "patents", "research", or "general"
+    
+    Returns:
+        Search results with patent numbers, dates, and technical details
     """
     
-    # ... (No changes to the inside of search_patents) ...
+    # Craft a focused prompt for patent searching
+    if focus == "patents":
+        prompt = f"""Search for patents and prior art related to: {query}
+
+Please provide:
+1. Specific US patent numbers (format: US 1,234,567)
+2. International patents (PCT, EPO, CN, JP)
+3. Publication dates
+4. Brief description of the technical approach
+5. Key differences from the query
+
+Focus on the most relevant 3-5 patents."""
+    else:
+        prompt = f"Search for technical information about: {query}"
     
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
-                # ... (rest of the code)
+                "https://api.perplexity.ai/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "sonar",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are a patent research assistant. Always provide specific patent numbers and technical details. Be concise but thorough."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    "temperature": 0.2,
+                    "max_tokens": 1500
+                },
+                timeout=30.0
             )
             
             if response.status_code == 200:
@@ -286,19 +325,65 @@ async def list_upcoming_meetings(days_ahead: int = 7) -> str:
         days_ahead
     )
 
-# --- (No changes needed to server_info, health_check, or __main__) ---
-
+# Add server info resource
 @mcp.resource("server://info")
 def server_info() -> str:
-    # ... (no change) ...
-    return """🤖 IP Assistant MCP Server ..."""
+    """Information about this MCP server and its capabilities"""
+    return """🤖 IP Assistant MCP Server
+
+This server helps Daimler engineers move inventions through the IP pipeline.
+
+📋 Available Tools:
+
+1. search_patents
+   - Search for patents and prior art using Perplexity AI
+   - Provides patent numbers, dates, and technical details
+   - Usage: "Search for patents on adaptive cooling fins"
+
+2. schedule_meeting
+   - Create Google Calendar events
+   - Sends invitations to attendees
+   - Includes Google Meet links
+   - Usage: "Schedule meeting with paul.focke@daimler.com tomorrow at 2 PM"
+
+3. find_available_times
+   - Check calendar availability
+   - Find open slots for meetings
+   - Usage: "Check my availability on Friday"
+
+4. list_upcoming_meetings
+   - View upcoming meetings
+   - Default: next 7 days
+   - Usage: "What meetings do I have this week?"
+
+🔧 Configuration:
+- Patent Search: Powered by Perplexity AI
+- Calendar: Google Calendar API with OAuth2
+- Transport: Server-Sent Events (SSE)
+
+📝 Example Usage:
+"I invented a new adaptive cooling system for EV batteries. Search for similar patents and schedule a meeting with Paul for next Tuesday at 2 PM to discuss it."
+"""
 
 @mcp.resource("server://health")
 def health_check() -> str:
-    # ... (no change) ...
-    return f"""🏥 Health Status ..."""
+    """Health check endpoint"""
+    perplexity_status = "✅ Connected" if PERPLEXITY_API_KEY else "❌ API key missing"
+    calendar_status = "✅ Configured" if os.getenv("GOOGLE_REFRESH_TOKEN") else "❌ Not authenticated"
+    
+    return f"""🏥 Health Status
+
+Perplexity API: {perplexity_status}
+Google Calendar: {calendar_status}
+
+Server: Running
+Transport: SSE (Server-Sent Events)
+"""
 
 
 if __name__ == "__main__":
-    # ... (no change) ...
+    port = int(os.getenv("PORT", 8000))
+    
+
+    
     mcp.run(transport="sse", host="0.0.0.0", port=port)
