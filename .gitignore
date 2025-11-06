@@ -1,0 +1,8 @@
+credentials.json
+token.json
+.env
+__pycache__/
+*.pyc
+.DS_Store
+venv/
+client_secret_488281299177-fskfcqdr975pjkh3qp1k11s6o0p8e157.apps.googleusercontent.com.json
