@@ -1,15 +1,22 @@
 services:
   - type: web
-    name: ip-assistant-mcp
+    name: engineering-patent-app # Your service name
     env: python
     region: oregon
     plan: free
+    
     buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
-    # Add this entire healthCheck block
+    
+    # Make sure this is pointing to the right file
+    startCommand: python main.py 
+    
+    # --- THIS IS THE BLOCK THAT IS FAILING ---
+    # You MUST add this to your file
     healthCheck:
       path: /health
-      initialDelaySeconds: 45
+      initialDelaySeconds: 45 
+    # ----------------------------------------
+      
     envVars:
       - key: PERPLEXITY_API_KEY
         sync: false
@@ -20,6 +27,6 @@ services:
       - key: GOOGLE_REFRESH_TOKEN
         sync: false
       - key: PYTHON_VERSION
-        value: "3.12"  # Changed from 3.13.0 for stability
+        value: "3.12"
       - key: PORT
         value: "8000"
